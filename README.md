@@ -21,6 +21,13 @@ uvicorn app.main:app --reload
 
 API docs at `http://localhost:8000/docs`.
 
+To populate the catalogue with sample verified vendors and listings so
+search and landed-cost have real data to return:
+
+```bash
+python -m app.seed
+```
+
 Key endpoints:
 - `POST /vendors` — publish an unclaimed, registry-sourced stub profile
 - `POST /vendors/{id}/claim` / `POST /vendors/claims/{id}/approve` — claim-your-profile flow

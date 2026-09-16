@@ -5,7 +5,7 @@ This implements the Phase 1 MVP scope from the research blueprint
 listing editor with quantity-tiered pricing, server-queryable search,
 gated enquiries, automatic tariff classification, and landed-cost
 estimation. Reverse corridor (USA→India), payments, Typesense, and
-semantic/embedding search are deliberately out of scope here — they are
+hosted-embedding search and Typesense are deliberately out of scope here — they are
 Phase 2+ per the blueprint's own sequencing rule (§7.2: "do not build the
 reverse corridor in parallel"; "do not add a search service on day one").
 
@@ -84,7 +84,7 @@ same request — not a flag for a human to notice later (§6.4, §10.5).
 |---|---|---|
 | Backend | Python/FastAPI | FastAPI, sync SQLAlchemy 2.0 ORM |
 | Database | Postgres, managed; pgvector later | SQLAlchemy models portable to Postgres; smoke-tested against SQLite for zero-dependency local dev; `LandedCostEstimate`/`Listing.embedding` columns are JSON now, swap to `pgvector`'s `Vector` type when semantic search (Phase 2) lands |
-| Search | Postgres full-text first | `ILIKE`/basic filter search in `listings.search`; swap the query body for `to_tsvector`/`plainto_tsquery` when the catalogue is real, migrate to Typesense only in Phase 2 |
+| Search | Postgres full-text first | SQL filters (hts10, category) narrow candidates, then `services/semantic_search.py` ranks free-text `q` by TF-IDF cosine similarity — closer to relevance-ranked search than ILIKE, with no external service or API key to fail at deploy time; swap its internals for a real embeddings pipeline (or move filtering to `to_tsvector`) when the catalogue is real, migrate to Typesense only in Phase 2 |
 | Auth | Managed IdP | Minimal JWT + bcrypt for the MVP; buyer-only (§7.1 "buy this rather than build it" — noted as a deliberate simplification to keep the reference implementation dependency-free, not a recommendation to keep it in production) |
 | Frontend | React, moving to SSR | React + Vite SPA here; the router/page split (`Search`, `ListingDetail`, `VendorOnboarding`, `Moderation`) maps directly onto the SSR page boundaries the blueprint calls for in §7.2 ("listing and category pages must be server-rendered") — moving to Next.js/Remix only changes the render target, not the component boundaries |
 | Payments | Deferred to Phase 4 | Not implemented — no code path touches money |

@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
 from app import models, schemas
 from app.database import get_db
+from app.services import semantic_search
 from app.services.classification import classify
 from app.services.pricing import ensure_never_empty
 
@@ -77,9 +77,13 @@ def search_listings(
     category: str | None = None,
     db: Session = Depends(get_db),
 ):
-    """Section 9.3 — placeholder for embedding-based semantic matching.
-    Postgres full-text/ILIKE for now per the Phase-1 stack decision
-    (Section 7.1: 'Do not add a search service on day one')."""
+    """Section 9.3 — a relevance-ranked search over the live catalogue.
+    Filters (hts10, category) narrow the candidate set in SQL; free-text
+    `q` then ranks that set with TF-IDF cosine similarity
+    (services/semantic_search.py) rather than an ILIKE substring match,
+    so results with more/rarer matching terms surface first instead of
+    in an arbitrary row order. This is the Phase-1 bridge described in
+    that module's docstring, not the Phase-2 embeddings pipeline."""
     query = (
         db.query(models.Listing)
         .options(joinedload(models.Listing.vendor), joinedload(models.Listing.price_tiers))
@@ -89,11 +93,16 @@ def search_listings(
         query = query.filter(models.Listing.hts10 == hts10)
     if category:
         query = query.filter(models.Listing.taxonomy_path.ilike(f"%{category}%"))
-    if q:
-        like = f"%{q}%"
-        query = query.filter(or_(models.Listing.title.ilike(like), models.Listing.description.ilike(like)))
 
-    listings = query.limit(50).all()
+    candidates = query.limit(500).all()
+
+    if q:
+        ranked = semantic_search.rank(q, candidates)
+        by_id = {l.id: l for l in candidates}
+        listings = [by_id[listing_id] for listing_id, _score in ranked[:50]]
+    else:
+        listings = sorted(candidates, key=lambda l: l.created_at, reverse=True)[:50]
+
     return [
         {
             "id": l.id,
